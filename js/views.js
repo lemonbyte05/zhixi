@@ -373,6 +373,17 @@
         return '<button class="chip" data-a="open-ex" data-id="' + r.id + '">' + esc(r.title) + '</button>';
       }).join('') + '</div></div>';
 
+    /* P1-5 资料来源（可审计） */
+    var srcTagCls = e.sourceType === 'demo' ? 'tag-orange' : 'tag-sage';
+    var srcLabel = e.sourceType === 'demo' ? 'Demo模拟内容' : '公开资料整理';
+    html += '<div class="fold"><button class="fold-head" data-a="fold" data-t="fold-src">资料来源<span class="arr">▾</span></button>' +
+      '<div class="fold-body"><div class="fold-body-inner">' +
+      '<p style="margin-bottom:8px"><span class="tag ' + srcTagCls + '">' + srcLabel + '</span></p>' +
+      '<p style="font-size:13px">' + esc(e.sourceTitle) + '</p>' +
+      (e.sourceUrl ? '<p style="margin-top:6px"><a href="' + esc(e.sourceUrl) + '" target="_blank" rel="noopener" style="color:var(--gold-deep);font-size:12.5px">查看来源站点 ↗</a></p>' : '') +
+      '<p class="tiny" style="margin-top:10px">知息未接入馆方内部系统。标注「Demo模拟内容」的条目仅用于产品演示，不冒充馆方官方讲解。</p>' +
+      '</div></div></div>';
+
     if (!inRoute) {
       html += '<div style="margin-top:16px"><button class="btn btn-ghost" data-a="add-to-route" data-id="' + e.id + '">＋ 加入我的路线</button></div>';
     } else if (!isCurrent && c.visitedIds.indexOf(e.id) < 0) {
@@ -426,32 +437,33 @@
     return html;
   };
 
-  /* ================= CulturalExtension ================= */
+  /* ================= CulturalExtension（P1-4：兴趣驱动推荐） ================= */
   V.culture = function () {
+    var recs = window.Agent.tools.culture.recommend();
     var tops = Store.topInterests(2);
-    var tset = tops.length ? tops.map(function (t) { return t.id; }) : ['bronze'];
-    var prods = MUSEUMS[Store.ctx.museumId].products.filter(function (p) {
-      return p.topics.some(function (t) { return tset.indexOf(t) >= 0; });
-    });
-    if (!prods.length) prods = MUSEUMS[Store.ctx.museumId].products.slice(0, 3);
     var topName = tops.length ? topicName(tops[0].id) : '青铜礼制';
     var html = '<div class="screen center-page scroll">' + brandRow() +
       '<h1 class="sum-hero" style="font-size:25px">把这份兴趣带走？</h1>' +
-      '<p class="sub">你今天对<b style="color:var(--gold-deep)">「' + esc(topName) + '」</b>印象最深。这些不只是商品——每一件都和你走过的路有关。</p>' +
+      '<p class="sub">你今天对<b style="color:var(--gold-deep)">「' + esc(topName) + '」</b>印象最深。以下每一件都由你的真实参观轨迹选出，并说明与你有关的理由。</p>' +
       '<div style="height:18px"></div>';
-    prods.forEach(function (p) {
-      var wished = Store.ctx.wishedProducts.indexOf(p.id) >= 0;
+    recs.forEach(function (p) {
+      var wished = Store.ctx.wishedProducts.indexOf(p.productId) >= 0;
+      var relChips = (p.relatedExhibits || []).map(function (t) {
+        return '<span class="tag tag-gray" style="margin-right:5px">' + esc(t) + '</span>';
+      }).join('');
       html += '<div class="card prod-card">' +
         '<div class="prod-thumb" style="background:linear-gradient(160deg,#2E2A22,#4A4030)">' +
-        '<svg viewBox="0 0 100 100" fill="none" stroke="#D9BE8C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + (ICONS[p.art] || ICONS.bookmark) + '</svg></div>' +
+        '<svg viewBox="0 0 100 100" fill="none" stroke="#D9BE8C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' + (ICONS[({ p1:'bookmark', p2:'notebook', p3:'booklet', p4:'cards' })[p.productId]] || ICONS.bookmark) + '</svg></div>' +
         '<div class="prod-info" style="flex:1"><b>' + esc(p.name) + '</b>' +
-        '<div class="why">为什么与你有关：' + esc(p.why) + '</div></div>' +
+        '<div class="why">为什么与你有关：' + esc(p.reason) + '</div>' +
+        (relChips ? '<div style="margin-top:7px">' + relChips + '</div>' : '') +
+        '</div>' +
         '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">' +
         '<span class="prod-price">' + esc(p.price) + '</span>' +
-        '<button class="wish-btn' + (wished ? ' on' : '') + '" data-a="wish" data-id="' + p.id + '">' + (wished ? '已收下 ✓' : '收下心意') + '</button>' +
+        '<button class="wish-btn' + (wished ? ' on' : '') + '" data-a="wish" data-id="' + p.productId + '">' + (wished ? '已收下 ✓' : '收下心意') + '</button>' +
         '</div></div>';
     });
-    html += '<p class="tiny" style="margin:4px 2px 18px">文创信息为 Demo 模拟数据，仅作文化延伸演示，不涉及购买。</p>' +
+    html += '<p class="tiny" style="margin:4px 2px 18px">文创信息为 Demo 模拟数据，仅作文化延伸演示，不涉及购买。推荐由你今日的兴趣、停留与提问记录驱动。</p>' +
       '<button class="btn btn-primary" data-a="finish-all">完成参观，期待下次</button>' +
       '<div style="height:26px"></div></div>';
     return html;

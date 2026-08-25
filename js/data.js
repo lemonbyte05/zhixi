@@ -252,6 +252,63 @@ window.EXHIBITS = [
 window.EX_INDEX = {};
 EXHIBITS.forEach(function (e) { EX_INDEX[e.id] = e; });
 
+/* ============================================================
+   P1-1 知识库富化层：keywords/themes/people/concepts/relatedQuestions
+   P1-5 来源审计层：sourceType/sourceTitle/sourceUrl
+   通过 ENRICH 表统一注入，未覆盖字段使用安全默认值。
+   sourceType 取值：'public_site'(公开资料整理) | 'demo'(Demo模拟内容)
+   ============================================================ */
+window.EX_ENRICH = {
+  E01: { keywords:['钺','亚醜','苏埠屯','军权','人面纹','方国'], themes:['权力与身份','商代方国'], people:[], concepts:['礼器制度','军事统帅权','透雕'],
+    relatedQuestions:['钺真的用来打仗吗？','亚醜是谁？'], sourceType:'public_site', sourceTitle:'山东博物馆官网·馆藏珍品（公开资料整理）', sourceUrl:'https://www.sdmuseum.com/' },
+  E02: { keywords:['簋','册命','铭文','鼎簋组合','列鼎制度'], themes:['礼乐制度','家族记忆'], people:['颂（西周贵族）'], concepts:['礼器等级','册命典礼','金文'],
+    relatedQuestions:['九鼎八簋是什么规格？'], sourceType:'public_site', sourceTitle:'山东博物馆官网·镇馆之宝（公开资料整理）', sourceUrl:'https://www.sdmuseum.com/' },
+  E03: { keywords:['爵','温酒','祭祀','云雷纹','酒器'], themes:['商人尚酒'], people:[], concepts:['祭祀礼仪','纹饰程式'], relatedQuestions:['爵的柱子是做什么的？'] },
+  E04: { keywords:['鼎','兽面纹','饕餮','问鼎','炊器'], themes:['权力象征'], people:['楚庄王（典故）'], concepts:['国之大器','礼器核心'], relatedQuestions:['鼎为什么会成为国家象征？'] },
+  E05: { keywords:['觥','夔龙纹','宴饮','兽形器'], themes:['宴饮文化'], people:[], concepts:['觥筹交错','肖生器物'], relatedQuestions:['觥筹交错说的是它吗？'] },
+  E06: { keywords:['编钟','钮钟','音律','双音钟','礼乐'], themes:['礼乐制度'], people:[], concepts:['一钟双音','钟鸣鼎食'], relatedQuestions:['编钟怎么敲出两个音？'] },
+  E07: { keywords:['错金银','金银丝','战国工艺','流云纹'], themes:['装饰工艺巅峰'], people:[], concepts:['错金工艺'], relatedQuestions:['错金是怎么做上去的？'] },
+  E08: { keywords:['铜镜','铭文镜','山字纹','规矩纹','祝愿'], themes:['日常生活'], people:[], concepts:['镜铭文化'], relatedQuestions:['古人用什么照镜子？'] },
+  E09: { keywords:['蛋壳陶','黑陶','龙山文化','快轮制陶','高柄杯'], themes:['史前技术巅峰'], people:[], concepts:['渗碳工艺','轮制法'], relatedQuestions:['0.3毫米是怎么做到的？'], sourceType:'public_site', sourceTitle:'山东博物馆官网·镇馆之宝（公开资料整理）', sourceUrl:'https://www.sdmuseum.com/' },
+  E10: { keywords:['红陶','兽形壶','大汶口','陶塑','小猪'], themes:['生活情趣','家畜驯养'], people:[], concepts:['图腾与财富'], relatedQuestions:['为什么做成小猪？'], sourceType:'public_site', sourceTitle:'山东博物馆官网·馆藏珍品（公开资料整理）', sourceUrl:'https://www.sdmuseum.com/' },
+  E11: { keywords:['鬶','白陶','袋足','鸟形','高岭土'], themes:['东夷鸟崇拜'], people:[], concepts:['白陶与瓷土'], relatedQuestions:['鬶和鸟有什么关系？'] },
+  E12: { keywords:['彩陶','大汶口','八角星纹','复彩'], themes:['原始审美'], people:[], concepts:['族群记号'], relatedQuestions:['彩绘为什么不掉色？'] },
+  E13: { keywords:['孙子兵法','孙膑兵法','银雀山','竹简','汉简','兵书','隶书'], themes:['兵学源头','早期书写'], people:['孙子（孙武）','孙膑','汉墓墓主'], concepts:['疑古与出土文献','简牍制度'], relatedQuestions:['竹简怎么保存两千年？','孙子和孙膑是同一个人吗？'], sourceType:'public_site', sourceTitle:'山东博物馆官网·银雀山汉简（公开资料整理）', sourceUrl:'https://www.sdmuseum.com/' },
+  E14: { keywords:['甲骨','卜骨','占卜','贞人','契刻','商代文字'], themes:['文字起源'], people:['贞人'], concepts:['卜辞结构','汉字之源'], relatedQuestions:['甲骨文都问些什么？'] },
+  E15: { keywords:['戈','车战','铭文','物勒工名','勾啄'], themes:['车战时代'], people:[], concepts:['兵器责任制度'], relatedQuestions:['戈怎么用？'] },
+  E16: { keywords:['铁剑','甲片','炒钢','骑兵','百炼钢'], themes:['铁器革命'], people:[], concepts:['冶铁技术'], relatedQuestions:['铁剑比铜剑强在哪？'] },
+  E17: { keywords:['墓室壁画','东平','宴饮图','拜谒图','斗鸡'], themes:['汉代生活图像'], people:[], concepts:['壁画墓制度'], relatedQuestions:['汉代人吃什么？'], sourceType:'public_site', sourceTitle:'山东博物馆官网·东平汉墓壁画（公开资料整理）', sourceUrl:'https://www.sdmuseum.com/' },
+  E18: { keywords:['孔子','老子','项橐','问礼','画像石','儒家','孔子见老子'], themes:['师承与学问','历史记忆图像化'], people:['孔子','老子','项橐'], concepts:['尊师崇学','汉代儒学'], relatedQuestions:['孔子和老子谁年纪大？','为什么这个题材流行？'], sourceType:'public_site', sourceTitle:'山东博物馆官网·汉画像石（公开资料整理）', sourceUrl:'https://www.sdmuseum.com/' },
+  E19: { keywords:['车马出行','仪仗','轺车','斧车','导骑'], themes:['身份等级'], people:[], concepts:['车服制度'], relatedQuestions:['几辆车算大官？'] },
+  E20: { keywords:['庖厨图','灶台','烤串','甑釜','备餐'], themes:['汉代饮食'], people:[], concepts:['宴饮配套图像'], relatedQuestions:['汉代人怎么做饭？'] },
+  E21: { keywords:['蝉冠','菩萨','博兴','龙华寺','青州风格','文物回归'], themes:['造像艺术','流失与回归'], people:[], concepts:['蝉纹意象','北朝造像'], relatedQuestions:['蝉冠为什么罕见？','它是怎么回来的？'], sourceType:'public_site', sourceTitle:'山东博物馆官网·蝉冠菩萨像（公开资料整理）', sourceUrl:'https://www.sdmuseum.com/' },
+  E22: { keywords:['贴金','彩绘','佛立像','曹衣出水','袈裟'], themes:['造像艺术'], people:[], concepts:['曹衣出水','妆彩复原'], relatedQuestions:['佛像原本是什么颜色？'] },
+  E23: { keywords:['背屏式','三尊像','飞天','龙衔莲','邑社'], themes:['信仰共同体'], people:[], concepts:['青州风格形制'], relatedQuestions:['为什么三尊一起雕？'] },
+  E24: { keywords:['冕','九旒','鲁荒王','朱檀','邹城','舆服制度'], themes:['衣冠制度'], people:['朱檀（明鲁荒王）'], concepts:['旒蔽明','亲王礼制'], relatedQuestions:['旒为什么要挡住眼睛？'], sourceType:'public_site', sourceTitle:'山东博物馆官网·明代鲁王展（公开资料整理）', sourceUrl:'https://www.sdmuseum.com/' },
+  E25: { keywords:['戗金','漆器','云龙纹','木匣'], themes:['皇家工艺'], people:[], concepts:['戗金工艺'], relatedQuestions:['戗金和描金有什么区别？'] },
+  E26: { keywords:['织金','纳石矢','袍料','捻金线'], themes:['纺织技艺'], people:[], concepts:['织金锦'], relatedQuestions:['金线怎么织进去的？'] }
+};
+EXHIBITS.forEach(function (e) {
+  var n = EX_ENRICH[e.id] || {};
+  e.keywords = n.keywords || [];
+  e.themes = n.themes || [];
+  e.people = n.people || [];
+  e.concepts = n.concepts || [];
+  e.relatedQuestions = n.relatedQuestions || [];
+  e.sourceType = n.sourceType || 'demo';
+  e.sourceTitle = e.sourceType === 'demo'
+    ? 'Demo 模拟内容（演示用，非馆方资料）'
+    : (n.sourceTitle || '公开资料整理');
+  e.sourceUrl = e.sourceType === 'demo' ? '' : (n.sourceUrl || '');
+});
+
+/* 文创补充：关联主题名（用于解释"为什么与你有关"） */
+MUSEUMS.sdm.products.forEach(function (p) {
+  p.relatedTopicNames = p.topics.map(function (t) {
+    return MUSEUMS.sdm.topics[t] ? MUSEUMS.sdm.topics[t].name : t;
+  });
+});
+
 /* 默认初始路线（第一次来 / 90分钟 / 慢慢看 / 青铜器） */
 window.DEFAULT_ROUTE = ['E01','E02','E03','E04','E05','E07','E09','E13'];
 

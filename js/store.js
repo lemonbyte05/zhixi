@@ -45,6 +45,8 @@
         checkinDone: false,       // 自然节点关怀已出现过
         /* 兴趣 */
         interests: {},            // topicId -> score
+        chatTopics: [],           // 对话中出现过的主题（文创/推荐依据）
+        walkKm: 0,                // 累计步行公里（行为信号）
         /* Agent 行为记录 */
         replanCount: 0,
         adjustments: [],          // [{at, kind, note}]
@@ -204,6 +206,9 @@
       }
       var walk = cur.walk, stay = opts.skip ? 1 : e.stay + (c.expandedIds.indexOf(e.id) >= 0 ? 2 : 0);
       c.ledger.push({ t: 'visit', m: walk + stay, at: Date.now(), id: e.id });
+      // P1-2 行为信号：累计步行距离
+      var m2 = this.museum();
+      c.walkKm = Math.round(((c.walkKm || 0) + this.distUnits(this.posOf(c.locationExhibitId || { lobby: true }), e) * m2.kmPerUnit) * 100) / 100;
       c.locationExhibitId = e.id;
       c.cursorIdx = cur.idx + 1;
       this.refreshStates();
@@ -230,6 +235,30 @@
       var it = this.ctx.interests;
       it[topicId] = Math.min(5, Math.max(0, (it[topicId] || 0) + delta));
     },
+    /* ---------- P1-2 行为信号（轻量规则，非机器学习） ---------- */
+    behaviorSignals: function () {
+      var c = this.ctx, S = this;
+      // 连续同主题展品数（从最近往前数）
+      var run = 0, lastTopic = null;
+      for (var i = c.visitedIds.length - 1; i >= 0; i--) {
+        var t = S.ex(c.visitedIds[i]).topic;
+        if (lastTopic === null || t === lastTopic) { run++; lastTopic = t; } else break;
+      }
+      return {
+        visitMinutes: Math.round(S.consumed()),
+        walkKm: Math.round((c.walkKm || 0) * 10) / 10,
+        longContentSkipped: c.skippedIds.length,
+        contentExpanded: c.expandedIds.length,
+        consecutiveSimilarExhibits: run,
+        explicitFeedback: c.adjustments.length
+      };
+    },
+    addChatTopic: function (topicId) {
+      if (!topicId) return;
+      var arr = this.ctx.chatTopics || (this.ctx.chatTopics = []);
+      if (arr.indexOf(topicId) < 0) arr.push(topicId);
+    },
+
     topInterests: function (n) {
       n = n || 3;
       var arr = Object.keys(this.ctx.interests).map(function (k) {

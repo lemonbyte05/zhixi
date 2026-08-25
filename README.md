@@ -1,83 +1,76 @@
-# 知息 ZHI XI · 博物馆自适应参观智能伴游（Demo）
+# 知息 ZHI XI · 博物馆自适应参观智能伴游
 
 > 知你当下，息息相伴。
 > 不赶着逛，也不怕错过。
 
-样板场景：山东博物馆 · 青铜器主题参观线
+样板场景：山东博物馆 · 青铜器主题参观线（Demo 模拟数据 + 公开资料整理，未接入馆方系统）
 
 ## 运行方式
 
-**方式一（推荐）**：本地服务器预览
+```bash
+# 方式一：本地服务（推荐，可启用 Agent LLM 代理）
+node server.js                                    # fallback 模式：无 Key，纯本地规则引擎
+DEEPSEEK_API_KEY=sk-xxx node server.js            # Agent 完整模式：LLM 理解+工具调用
 
-```
-cd zhi-xi
-node server.js
-# 打开 http://127.0.0.1:4923
-```
-
-**方式二**：直接双击 `index.html`（纯静态、零依赖、无需构建）
-
-建议用浏览器开发者工具切换到手机视口（iPhone 12 Pro / 390×844）体验最佳；
-直接在桌面浏览器打开也可以，页面会以手机框形式居中呈现。
-
-## 黄金路径（演示脚本）
-
-1. 首页选「🌿 慢慢看」→「90分钟」→ 输入"青铜器"（或点"暂时不知道"）→ 开始规划
-2. 规划页展示初始路线：8件核心展品 / 3个展厅 / 约1.7km / 讲解35分钟
-3. 开始参观 → 连续看完 3 件 → 自动弹出「我们逛了一阵子，要不要轻松一点？」→ 选「慢一点」
-4. 重规划卡片：后半程真实变短（件数/用时对比 + 调整理由），路线/地图/下一站同步变化
-5. 「调整一下」→「少讲一点」→ 展品页进入轻量模式（20秒核心信息）
-6. 展品页点「💬 想聊聊？」→ 问「这个和孔子有关系吗？」→ 回复含语境与推荐 → 点「带我去看看」
-7. 路线再次真实变化 → 继续参观 → 右上角「结束参观」
-8. 离馆总结：真实数据统计 + 今日兴趣演化 → 「下次继续」留下未完待续
-9. 文创延伸：每件文创说明与你今天参观的关联
-10. 完成后回到首页：出现「上次留下的那件…还想继续吗？」
-
-其他可试的自然语言（对话框或"调整一下"输入框）：
-- 我有点累 / 信息有点多 / 只看重点 / 我只剩20分钟了 / 还想看看类似的
-
-## 架构
-
-```
-zhi-xi/
-├── index.html          页面外壳（手机框容器）
-├── css/style.css       温暖人文科技视觉系统
-├── js/data.js          场馆配置 + 26件展品（来源分级标注）
-├── js/store.js         Agent Context：时间账本/三维度状态/兴趣演化
-├── js/agent.js         VisitPlannerAgent：四工具 + 结构化输出 + fallback
-├── js/views.js         全部页面模板 + 空间地图 + 器物线描图鉴
-├── js/app.js           控制器：路由/对话流/重规划确认/演示时钟
-├── server.js           可选的零依赖静态服务器
-├── test-golden.js      Agent逻辑黄金路径仿真测试（32项）
-└── test-views.js       全页面多状态渲染测试（20项）
-
-运行测试：node test-golden.js && node test-views.js
+# 方式二：双击 index.html（file:// 下 /api/chat 不可用，自动 fallback，功能完整）
 ```
 
-## 数据边界
+浏览器打开 http://127.0.0.1:4923 ；建议 F12 切换手机视口（390×844）。
 
-- `source:'public'` —— 亚醜钺、颂簋、蛋壳黑陶杯、银雀山汉简《孙子兵法》、
-  东平汉墓壁画、孔子见老子画像石、蝉冠菩萨像、九旒冕等，依据公开资料整理。
-- `source:'demo'` —— 其余条目及全部讲解文案为 Demo 模拟内容。
-- 未接入山东博物馆内部系统；场馆数据结构可整体更换（`MUSEUMS` 注册表）。
+## 架构（v2：真·工具调用型 Agent）
 
-## 关于大模型 API
-
-当前 VisitPlannerAgent 完全离线运行（规则引擎 + 结构化规划工具），
-不依赖任何 API 即可完整演示。
-
-如需让对话措辞由真实大模型生成，在 `index.html` 的 `<script>` 前加入：
-
-```html
-<script>
-window.ZHIXI_LLM = {
-  endpoint: 'https://api.deepseek.com/chat/completions',
-  apiKey:   'sk-你的密钥',
-  model:    'deepseek-chat'
-};
-</script>
+```
+用户自然语言
+  → VisitPlannerAgent（js/agent.js）
+      → LLM（经同源 /api/chat 代理，Key 只在服务端环境变量）
+          理解目标与约束 → 选择工具 → 组合结果 → 行动决策 → 措辞
+      → 本地确定性工具（LLM 无权编造数字/ID）：
+          KnowledgeTool   关键词+主题+人物+概念+时代组合检索（含别名扩展）
+          RouteTool       距离/步行时间/路线统计
+          StateTool       剩余时间·节奏·信息负荷·behaviorSignals 行为信号
+          PlanningTool    初始规划/收窄/收尾/插展品试算（加权贪心+顺路重排）
+          CultureExtensionTool 文创与兴趣轨迹绑定推荐
+      → 结构化 AgentAction JSON
+          { intent, reply, reason, toolCalls, routeChanged, newRoute,
+            addedExhibits, removedExhibits, contentMode,
+            estimatedTotalMinutes, nextAction }
+      → 前端按 nextAction 真实执行：
+          continue | replan | show_exhibits | light_mode | wrap_up | rest
 ```
 
-接入点在 `js/agent.js` 的 `Agent.chatAsync()`：
-LLM 只增强回复文案；意图识别与重规划始终由本地结构化引擎执行，
-API 失败时自动回落，页面永不报错。
+**分工边界**：LLM 只负责理解、约束提取、工具选择、行动决策与措辞；
+所有距离、时间、件数、路线由本地工具计算。normalize 阶段强制复核——
+LLM 给出的 estimatedTotalMinutes 一律被本地 RouteTool 重算覆盖，
+newRoute 自动补齐已看前缀、去重、顺路重排后才允许落地。
+
+**Fallback**：`window.ZHIXI_AGENT.endpoint` 不可达 / 服务端无 Key / LLM 超时或输出不合法
+→ 自动回落本地规则引擎（`Agent.think()`）。黄金路径在纯离线环境完整可演示。
+
+## API Key 安全（P0-2）
+
+- 前端代码中不存在任何 Key（`test-scenario.js 场景C` 静态扫描保证）。
+- 浏览器只 POST 同源 `/api/chat`；server.js 从环境变量 `DEEPSEEK_API_KEY` 读取并转发 DeepSeek。
+- 未配置 Key 时 `/api/chat` 返回 `{fallback:true}`，前端静默降级。
+
+## 黄金路径演示脚本
+
+1. 首页「🌿 慢慢看」→「90分钟」→ 输入"青铜器"→ 开始规划（初始路线由 PlanningTool 实时算出）
+2. 参观 → 连看 3 件 → 「要不要轻松一点？」→ 慢一点 → 后半程真实缩短
+3. 「调整一下」→ 少讲一点 → 轻量模式
+4. 展品页「想聊聊？」→"这个和孔子有关系吗？"→ 带我去看看 → 路线再次真实改变
+5. 结束参观 → 今日兴趣 → 未完待续 → 文创（理由绑定你的参观轨迹）→ 回首页续上一次
+
+## 测试
+
+```bash
+node test-golden.js     # 32项：Agent规则引擎黄金路径
+node test-views.js      # 20项：全页面多状态渲染
+node test-scenario.js   # 46项：完整业务流 + LLM工具编排仿真(伪transport) + Key安全扫描
+```
+
+## 数据边界（P1-5 可审计）
+
+每件展品标注 `sourceType`：
+- `public_site` —— 亚醜钺、颂簋、蛋壳黑陶杯、银雀山汉简《孙子兵法》、东平汉墓壁画、
+  孔子见老子画像石、蝉冠菩萨像、九旒冕等，依据公开资料整理，详情页附来源链接。
+- `demo` —— 其余条目及讲解文案为 Demo 模拟内容，详情页明确标注，不冒充馆方官方内容。

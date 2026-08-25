@@ -18,6 +18,12 @@
   </div>
   <div id="stage-note">知息 ZHI XI · Demo 模拟数据 · 样板场景：山东博物馆</div>
 </div>
+<script>
+  /* Agent 配置：仅声明同源代理端点。
+     P0-2 安全约定：任何 API Key 都不得出现在前端；Key 只存在于服务端环境变量中。
+     /api/chat 不可用（如 file:// 直接打开）时，Agent 自动使用本地规则引擎 fallback。 */
+  window.ZHIXI_AGENT = { endpoint: '/api/chat', model: 'deepseek-chat' };
+</script>
 <script src="js/data.js"></script>
 <script src="js/store.js"></script>
 <script src="js/agent.js"></script>

@@ -135,7 +135,8 @@
             return '<button class="' + a.cls + '" data-a="' + a.a + '">' + a.label + '</button>';
           }).join('') + '</div>';
         }
-        return '<div class="msg ai"><div class="bubble">' + Views.esc(m.text).replace(/\n/g, '<br>') + '</div>' + acts + '</div>';
+        var note = m.toolsNote ? '<div class="tiny" style="margin:-6px 0 10px 4px;opacity:.75">✦ ' + Views.esc(m.toolsNote) + '</div>' : '';
+        return '<div class="msg ai"><div class="bubble">' + Views.esc(m.text).replace(/\n/g, '<br>') + '</div>' + note + acts + '</div>';
       }).join('') +
         (typing ? '<div class="msg ai"><span class="typing"><i></i><i></i><i></i></span></div>' : '');
       box.scrollTop = box.scrollHeight;
@@ -147,6 +148,11 @@
       if (!text) return;
       var self = this;
       Store.ctx.chatCount++; Store.save();
+      // P1-2/P1-4：对话中提到的主题进入兴趣上下文（供文创推荐与Agent使用）
+      Object.keys(INTEREST_SEEDS).forEach(function (k) {
+        if (text.indexOf(k) >= 0) { Store.addChatTopic(INTEREST_SEEDS[k]); Store.addInterest(INTEREST_SEEDS[k], 0.5); }
+      });
+      Store.save();
       this.chatMsgs.push({ role: 'user', text: text });
       this.chatMsgs.forEach(function (m) { delete m.actions; }); // 新消息后旧按钮失效
       this.renderChat(true);
@@ -154,20 +160,26 @@
 
       Agent.chatAsync(text).then(function (r) {
         var m = { role: 'ai', text: r.reply };
-        if (r.intent === 'propose_add' && r.proposedIds && r.proposedIds.length) {
+        // 工具调用透明化：让"系统真的做了事"可感知，但不暴露技术细节
+        if (r.toolCalls && r.toolCalls.length) {
+          m.toolsNote = r.toolCalls.map(function (t) { return t.summary; }).slice(0, 3).join(' · ');
+        }
+        if (r.fallbackUsed) m.toolsNote = (m.toolsNote ? m.toolsNote + ' · ' : '') + '本地引擎';
+        var na = r.nextAction;
+        if ((na === 'show_exhibits') && r.proposedIds && r.proposedIds.length) {
           self.lastPropose = r;
           m.actions = [
             { label: '带我去看看', cls: 'ca-go', a: 'chat-go' },
             { label: '先继续这里', cls: 'ca-stay', a: 'chat-stay' }
           ];
-        } else if (r.routeChanged && r.newRoute) {
-          // 对话中触发的重规划：先回复，再弹出规划卡
+        } else if (r.routeChanged && r.newRoute || na === 'replan' || na === 'wrap_up') {
           self.chatMsgs.push(m); self.renderChat(false);
+          Agent.applyResult(Object.assign({}, r)); // 应用休息/内容模式等即时副作用
           setTimeout(function () { self.showReplan(r); }, 500);
           return;
         } else {
-          Agent.applyResult(r); // content_mode 等即时生效
-          if (r.intent === 'content_mode') self.toast('已为你切换：轻量模式 ☁️');
+          Agent.applyResult(r);
+          if (na === 'light_mode' || r.intent === 'content_mode') self.toast('已为你切换：轻量模式 ☁️');
         }
         self.chatMsgs.push(m);
         self.renderChat(false);
@@ -207,32 +219,9 @@
         if (interest.indexOf(k) >= 0 && seeds.indexOf(INTEREST_SEEDS[k]) < 0) seeds.push(INTEREST_SEEDS[k]);
       });
 
-      // 初始路线：默认青铜主题线，再按模式与时间裁剪
-      var route = DEFAULT_ROUTE.slice();
-      if (seeds.length && seeds.indexOf('bronze') < 0) {
-        // 用户明确要别的主题 → 用知识检索替换部分
-        var found = [];
-        Object.keys(INTEREST_SEEDS).forEach(function (k) {
-          if (interest.indexOf(k) >= 0) {
-            EXHIBITS.forEach(function (e) { if (e.topic === INTEREST_SEEDS[k] && found.indexOf(e.id) < 0) found.push(e.id); });
-          }
-        });
-        if (found.length >= 4) route = found.slice(0, 8);
-      }
-      var budget = minutes * 0.62; // 展品内容占可用时间的比重
-      var S = Store;
-      function stats(ids) { return S.routeStats(ids, null); }
-      var guard = 0;
-      while (stats(route).totalMin > budget && route.length > 3 && guard++ < 12) {
-        // 删除价值最低的中间项
-        var worstI = -1, ws = Infinity;
-        route.forEach(function (id, i) {
-          var e = S.ex(id);
-          var sc = (e.priority || 1) * 2 + i * -0.01;
-          if (sc < ws) { ws = sc; worstI = i; }
-        });
-        route.splice(worstI, 1);
-      }
+      // P1-3 初始路线：走 Agent/PlanningTool 真实规划（知识候选池 + 加权贪心 + 顺路重排）
+      var plan = Agent.buildInitialPlan({ minutes: minutes, mode: mode, seedTopics: seeds });
+      var route = plan.ids.slice();
 
       Object.assign(c, {
         entryMode: mode, totalMinutes: minutes,
