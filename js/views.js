@@ -299,6 +299,12 @@
         '<div class="nc-actions"><button class="btn btn-primary" data-a="end-visit">去看今日回顾</button></div></div>';
     }
 
+    /* 想聊聊：始终可见的 Agent 入口（LLM 工具调用主入口） */
+    html += '<div class="chat-entry" data-a="open-chat">' +
+      '<div class="ce-ico">💬</div>' +
+      '<div class="ce-text"><b>想聊聊？</b><span>问问我，比如「这个和孔子有关系吗？」</span></div>' +
+      '<div class="ce-arr">›</div></div>';
+
     /* 兴趣悄悄话 */
     var top = Store.topInterests(1)[0];
     if (top && top.score >= 3 && !c.whisperShown && cur) {

@@ -341,6 +341,19 @@ input,textarea{font-family:inherit;color:inherit}
 .whisper p{font-size:13.5px;color:var(--ink-2);line-height:1.7;margin-bottom:11px}
 .whisper p b{color:var(--gold-deep);font-family:var(--serif)}
 
+/* ---------- 想聊聊（始终可见的 Agent 入口） ---------- */
+.chat-entry{margin:0 18px 14px;padding:14px 16px;border-radius:18px;background:linear-gradient(135deg,#2E2A22,#4A4030);
+  color:#F6F0E4;display:flex;align-items:center;gap:13px;cursor:pointer;border:none;text-align:left;
+  box-shadow:var(--shadow-lift);animation:rise .5s var(--ease)}
+.chat-entry:active{transform:scale(.985)}
+.chat-entry .ce-ico{flex:none;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:rgba(217,190,140,.22);font-size:19px}
+.chat-entry .ce-text{flex:1;min-width:0}
+.chat-entry .ce-text b{display:block;font-size:14.5px;letter-spacing:.2px;color:#EAD9B6}
+.chat-entry .ce-text span{display:block;font-size:12px;color:rgba(246,240,228,.62);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-entry .ce-arr{flex:none;color:rgba(234,217,182,.7);font-size:20px}
+
 /* 状态色变量（呼吸环） */
 [data-pace="calm"]  .breath,[data-pace="calm"]  .arc{stroke:var(--sage);color:var(--sage)}
 [data-pace="focus"] .breath,[data-pace="focus"] .arc{stroke:var(--gold);color:var(--gold)}
