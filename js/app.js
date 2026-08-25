@@ -48,6 +48,15 @@
       }
       $('#app').innerHTML = html;
       $('#app').firstChild && $('#app').firstChild.classList.add('fade-swap');
+      // 规划页：阶段化展示摘要卡片（含刷新后恢复场景，避免一直停留在动画页）
+      if (v === 'planning') {
+        var self = this;
+        clearTimeout(this._planTimer);
+        this._planTimer = setTimeout(function () {
+          var el = $('#plan-summary');
+          if (el) { el.style.display = 'block'; el.classList.add('rise'); el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+        }, 2400);
+      }
       // 兴趣条动画
       requestAnimationFrame(function () {
         document.querySelectorAll('.int-fill').forEach(function (el) { el.style.width = el.getAttribute('data-w') + '%'; });
@@ -66,6 +75,7 @@
       this._exId = params.exId || this._exId;
       Store.ctx.view = view;
       Store.emit();
+      this.render();
     },
 
     /* ---------- Toast ---------- */
@@ -231,12 +241,6 @@
       Store.refreshStates();
       Store.save();
       this.render();
-      // 阶段化展示
-      var self = this;
-      setTimeout(function () {
-        var el = $('#plan-summary');
-        if (el) { el.style.display = 'block'; el.classList.add('rise'); el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
-      }, 2400);
     },
 
     startVisitRoute: function (extraFirstId) {
@@ -323,20 +327,16 @@
           Store.ctx.view = 'planning';
           Store.save(); this.render();
           this._resumePid = pid;
-          setTimeout(function () {
-            var s = $('#plan-summary');
-            if (s) { s.style.display = 'block'; s.classList.add('rise'); }
-          }, 1400);
           break;
         }
         case 'dismiss-memory': window.ZX_MEMORY.pendingContinue = null; this.saveMemory(); this.render(); break;
 
         /* ----- Planning ----- */
         case 'start-visit': this.startVisitRoute(this._resumePid); this._resumePid = null; break;
-        case 'back-welcome': Store.patch({ view: 'welcome' }); break;
+        case 'back-welcome': this.go('welcome'); break;
 
         /* ----- Visit ----- */
-        case 'tab': Store.patch({ view: el.getAttribute('data-v') }); break;
+        case 'tab': this.go(el.getAttribute('data-v')); break;
         case 'open-current': {
           var cu = Store.currentNext();
           if (cu) { this.prevView = 'visit'; this.go('exhibit', { exId: cu.ex.id }); }

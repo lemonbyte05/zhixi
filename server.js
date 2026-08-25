@@ -14,6 +14,16 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const root = __dirname;
+
+// 启动时自动加载项目根目录的 .env（DEEPSEEK_API_KEY 等）
+(function loadDotEnv() {
+  const envPath = path.join(root, ".env");
+  if (!fs.existsSync(envPath)) return;
+  fs.readFileSync(envPath, "utf8").split(/\r?\n/).forEach(function (line) {
+    const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/.exec(line);
+    if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2];
+  });
+})();
 const PORT = process.env.PORT || 4923;
 const mime = {
   ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8",
