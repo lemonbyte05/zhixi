@@ -92,6 +92,7 @@ input,textarea{font-family:inherit;color:inherit}
 .mode-card span{font-size:12px;color:var(--ink-3);line-height:1.55;display:block}
 .mode-card.on{border-color:var(--gold);box-shadow:0 12px 30px rgba(166,124,55,.18);background:linear-gradient(170deg,#FFFEFA,var(--gold-soft))}
 .mode-card.on::after{content:"";position:absolute;top:12px;right:12px;width:7px;height:7px;border-radius:50%;background:var(--gold)}
+.mode-card:active{transform:scale(.98);border-color:var(--gold);background:var(--gold-soft)}
 .q-label{font-family:var(--serif);font-size:17px;font-weight:600;margin:0 0 13px}
 .pill-row{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:26px}
 .pill{padding:10px 19px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:14px;color:var(--ink-2);
@@ -359,3 +360,57 @@ input,textarea{font-family:inherit;color:inherit}
 [data-pace="focus"] .breath,[data-pace="focus"] .arc{stroke:var(--gold);color:var(--gold)}
 [data-pace="tight"] .breath,[data-pace="tight"] .arc{stroke:var(--orange);color:var(--orange)}
 .fade-swap{animation:screenIn .4s var(--ease)}
+
+/* ============================================================
+   交互反馈体系 v2：所有可点元素统一"按压缩放+微暗"，杜绝点击无反应
+   ============================================================ */
+[data-a]{cursor:pointer}
+[data-a]:active{transform:scale(.985);filter:brightness(.96)}
+
+/* chips（时间、主题、建议词、相关文物） */
+.chip{transition:all .2s var(--ease)}
+.chip:active{transform:scale(.94);background:var(--gold-soft);border-color:var(--gold);color:var(--gold-deep)}
+
+/* 路线列表行 */
+.stop-row{transition:background .2s var(--ease),transform .2s var(--ease)}
+.stop-row:active{transform:scale(.99);background:#F6F1E6}
+
+/* 折叠头（展开讲解/为什么值得看/相关文物/资料来源） */
+.fold-head{transition:color .2s var(--ease),transform .2s var(--ease)}
+.fold-head:active{color:var(--gold-deep);transform:translateX(3px)}
+
+/* 底部对话框关闭按钮 */
+.sheet-close{transition:all .2s var(--ease)}
+.sheet-close:active{transform:scale(.86);background:var(--gold-soft);color:var(--gold-deep);border-color:var(--gold)}
+
+/* 发送键（chat / adjust） */
+.composer .send,.free-input .send{transition:all .18s var(--ease)}
+.composer .send:active{transform:scale(.84);background:var(--gold-deep);box-shadow:0 4px 12px rgba(138,100,38,.45)}
+.free-input .send:active{transform:scale(.88);background:#000}
+
+/* 收藏按钮（文创） */
+.wish-btn{transition:all .2s var(--ease)}
+.wish-btn:active{transform:scale(.92);background:var(--ink);color:#fff;border-color:var(--ink)}
+
+/* 聊天操作按钮（带我去看看 / 先继续这里） */
+.chat-actions button{transition:all .2s var(--ease)}
+.chat-actions button:active{transform:translateY(-1px) scale(.95);box-shadow:var(--shadow-lift)}
+.ca-go:active{background:var(--gold-deep)}
+.ca-stay:active{background:#F2ECDF}
+
+/* 标签栏 */
+.tabbar button{transition:color .2s var(--ease),transform .18s var(--ease)}
+.tabbar button:active{transform:translateY(-1px) scale(.94);color:var(--gold-deep)}
+.tabbar button.on:active{color:var(--gold-deep)}
+
+/* 卡片整体可点（下一站卡片 / 发现项 / 我的项） */
+.card[data-a]{transition:transform .22s var(--ease),box-shadow .22s var(--ease),background .2s var(--ease)}
+.card[data-a]:active{transform:scale(.988);box-shadow:var(--shadow-lift)}
+
+/* 深色聊天入口：按压时微微提亮而非变暗 */
+.chat-entry:active{transform:scale(.985);filter:brightness(1.12)}
+
+/* 展品页返回按钮 / 轻量切换 chip：单独反馈 */
+.back-fab{transition:all .2s var(--ease)}
+.back-fab:active{transform:scale(.9);background:var(--gold-deep);color:#fff}
+.light-toggle:active{transform:scale(.94)}
