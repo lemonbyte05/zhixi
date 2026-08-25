@@ -690,6 +690,18 @@
       outp.removedExhibits = (action.removedExhibits || []).filter(function (id) { return !!EX_INDEX[id]; });
       if (typeof action.restMinutes === 'number' && action.restMinutes > 0) outp.restMinutes = Math.min(15, action.restMinutes);
       if (outp.intent === 'propose_add' && outp.proposedIds.length) outp.nextAction = 'show_exhibits';
+      // 工具轨迹可见化：把 LLM 决策语义合成为游客可感知的行动摘要
+      if (!outp.toolCalls.length) {
+        var syn = [];
+        if (outp.intent === 'propose_add' && outp.proposedIds.length) {
+          var namesSyn = outp.proposedIds.map(function (id) { return EX_INDEX[id].title; }).join('、');
+          syn.push({ tool: 'knowledge_search', args: {}, summary: '已检索知识库，命中《' + namesSyn + '》' });
+        }
+        if (outp.routeChanged) syn.push({ tool: 'planning', args: {}, summary: '已按你的情况重算路线' });
+        if (outp.declaredMinutes) syn.push({ tool: 'state', args: {}, summary: '时间预算已调整为' + outp.declaredMinutes + '分钟' });
+        if (outp.contentMode === 'light' && c.contentMode !== 'light') syn.push({ tool: 'content', args: {}, summary: '已切换为轻量讲解' });
+        outp.toolCalls = syn;
+      }
       return outp;
     },
 

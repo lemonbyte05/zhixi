@@ -192,7 +192,7 @@
       '<button class="chip' + (W.interest === '' ? ' on' : '') + '" data-a="w-none">暂时不知道</button></div>' +
       '<p class="tiny rise d3" style="margin:6px 2px 26px">不知道从哪里开始，也没关系。</p>' +
       '<button class="btn btn-primary rise d4" data-a="w-plan">开始规划</button>' +
-      '<p class="demo-note rise d5">样板场景：山东博物馆 · Demo 模拟数据<br>知息是可更换场馆的自适应参观引擎</p>';
+      '<p class="demo-note rise d5">样板场景：山东博物馆 · Demo 模拟数据<br>自适应参观引擎 v2.1 · Agent LLM 已连接</p>';
 
     if (mem.pendingContinue && EX_INDEX[mem.pendingContinue]) {
       var pe = EX_INDEX[mem.pendingContinue];
