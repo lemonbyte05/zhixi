@@ -533,7 +533,13 @@
         'newRoute:["展品id"]或null,addedExhibits:[],removedExhibits:[],proposedIds:[建议新增的展品id],' +
         'contentMode:"normal|light",restMinutes:number}\n' +
         '4. newRoute 只能来自 plan_route/wrap_up_route/adjust_route_lighter 的返回值。\n' +
-        '5. 游客表达疲劳→考虑 adjust_route_lighter；时间紧张→wrap_up_route；新兴趣→knowledge_search后propose_add；嫌讲解长→nextAction=light_mode。';
+        '5. 游客表达疲劳→adjust_route_lighter；时间紧张→wrap_up_route；嫌讲解长→nextAction=light_mode。\n' +
+        '6. 游客询问某文物的关系/来历/类似展品（如"这个和孔子有关系吗？""还有类似的吗？"）：\n' +
+        '   必须先调用 knowledge_search，然后：a) 用检索到的真实信息回答；b) 若结果中存在未参观的展品，\n' +
+        '   设 intent="propose_add"、proposedIds=检索命中的未参观展品ID（最多2件），让游客可一键前往。\n' +
+        '   示例：问"和孔子有关系吗"→search("孔子")→若命中E18孔子见老子画像石且未参观→proposedIds=["E18"]。\n' +
+        '7. 【防幻觉铁律】展品ID与名称只能来自 state_snapshot.currentRoute、已看列表或工具返回结果；\n' +
+        '   禁止凭记忆编造任何ID、名称或史实。不确定就说"我帮你查一下"并调用工具。';
     },
     _extractJson: function (text) {
       if (!text) return null;
@@ -592,7 +598,7 @@
         return new Promise(function (res) { setTimeout(function () { res(self.think(text)); }, 420 + Math.random() * 380); });
       }
       return this.llmLoop(text, ep, cfg.model).then(function (r) {
-        return self.normalize(r.action, r.toolCalls);
+        return self.normalize(r.action, r.toolCalls, text);
       }).catch(function () {
         // P0-1 fallback：LLM 失败 → 本地规则引擎完整接管
         var fb = self.think(text);
@@ -601,8 +607,8 @@
       });
     },
 
-    /** 归一化 LLM 决策：数字/路线强制以本地工具复核为准 */
-    normalize: function (action, toolCalls) {
+    /** 归一化 LLM 决策：数字/路线/展品ID强制以本地工具复核为准 */
+    normalize: function (action, toolCalls, userText) {
       var c = Store.ctx;
       action = action || {};
       var outp = this._out({
@@ -611,8 +617,24 @@
         reason: String(action.reason || ''),
         toolCalls: toolCalls || []
       });
-      if (NEXT_ACTIONS.indexOf(action.nextAction) >= 0) outp.nextAction = action.nextAction;
+      // nextAction：以 intent 为准（防 LLM 漏报/误报）
+      if (INTENT_ACTION[outp.intent]) outp.nextAction = INTENT_ACTION[outp.intent];
+      else if (NEXT_ACTIONS.indexOf(action.nextAction) >= 0) outp.nextAction = action.nextAction;
+      if (typeof action.restMinutes === 'number' && action.restMinutes > 0) outp.restMinutes = Math.min(15, action.restMinutes);
       if (action.contentMode === 'light' || action.contentMode === 'normal') outp.contentMode = action.contentMode;
+      // 时间声明：游客明确说"只剩N分钟"时，由本地强制压缩时间账本并进入收尾（LLM只负责听懂，数字由系统落地）
+      if (userText) {
+        var mtm = userText.match(/(\d+)\s*分钟/);
+        var hasTw = /剩|只有|还有不到|来得及/.test(userText);
+        var declared = /半小时/.test(userText) ? 30 : (mtm && hasTw ? parseInt(mtm[1], 10) : null);
+        if (declared && declared > 3 && declared < Store.remaining() * 0.75) {
+          outp.declaredMinutes = declared;
+          outp.intent = 'wrap_up';
+          outp.nextAction = 'wrap_up';
+          outp.proposedIds = [];
+          if (!outp.reason) outp.reason = '游客声明仅剩约' + declared + '分钟';
+        }
+      }
       // 路线复核：只接受全部合法且非空的 newRoute；自动补齐已看前缀；时长一律本地重算
       if (Array.isArray(action.newRoute) && action.newRoute.length &&
           action.newRoute.every(function (id) { return !!EX_INDEX[id]; })) {
@@ -630,7 +652,40 @@
           outp.estimatedTotalMinutes = outp.diffAfter.totalMin;
         }
       }
-      outp.proposedIds = (action.proposedIds || []).filter(function (id) { return !!EX_INDEX[id]; }).slice(0, 3);
+      // proposedIds 语义校验：候选必须能通过本地知识检索/关联图谱验证（防幻觉）
+      var rawProposed = (action.proposedIds || []).filter(function (id) { return !!EX_INDEX[id]; }).slice(0, 3);
+      if (rawProposed.length && outp.intent !== 'propose_add') outp.intent = 'propose_add';
+      if (outp.intent === 'propose_add') {
+        var seenIds = c.visitedIds.concat(c.skippedIds);
+        var cur = c.locationExhibitId ? Store.ex(c.locationExhibitId) : null;
+        var whitelist = {};
+        // 白名单：当前展品关联 ∪ 同主题 ∪ 用户语句检索Top5 ∪ 路线尾部
+        if (cur) {
+          (cur.related || []).forEach(function (id) { whitelist[id] = 1; });
+          EXHIBITS.forEach(function (e) { if (e.topic === cur.topic) whitelist[e.id] = 1; });
+        }
+        KnowledgeTool.search(userText || '').slice(0, 5).forEach(function (e) { whitelist[e.id] = 1; });
+        c.route.slice(Store.nextUnvisited()).forEach(function (id) { whitelist[id] = 1; });
+        var valid = rawProposed.filter(function (id) {
+          return seenIds.indexOf(id) < 0 && c.route.indexOf(id) < 0 && whitelist[id];
+        });
+        if (!valid.length) {
+          // LLM 提案不可信 → 本地检索兜底重算
+          var rem0 = Store.remaining();
+          var usedLocal = 0, local = [], prevL = c.locationExhibitId;
+          KnowledgeTool.search(userText || (cur ? MUSEUMS[c.museumId].topics[cur.topic].name : '青铜'))
+            .forEach(function (e) {
+              if (local.length >= 2) return;
+              if (seenIds.indexOf(e.id) >= 0 || c.route.indexOf(e.id) >= 0) return;
+              var cst = e.stay + Store.legWalk(prevL, e.id);
+              if (usedLocal + cst <= rem0 - 6) { local.push(e.id); usedLocal += cst; prevL = e.id; }
+            });
+          valid = local;
+          outp.reason += '（提案已由本地知识工具复核）';
+        }
+        outp.proposedIds = valid;
+        if (valid.length) outp.nextAction = 'show_exhibits';
+      }
       outp.addedExhibits = (action.addedExhibits || []).filter(function (id) { return !!EX_INDEX[id]; });
       outp.removedExhibits = (action.removedExhibits || []).filter(function (id) { return !!EX_INDEX[id]; });
       if (typeof action.restMinutes === 'number' && action.restMinutes > 0) outp.restMinutes = Math.min(15, action.restMinutes);
@@ -804,6 +859,11 @@
       opts = opts || {};
       var c = Store.ctx;
       var na = r.nextAction;
+      // 时间声明优先落地：先改账本再重排路线
+      if (r.declaredMinutes && r.declaredMinutes < Store.remaining()) {
+        c.totalMinutes = Math.round(Store.consumed() + r.declaredMinutes);
+        Store.refreshStates();
+      }
       // 内容深度
       if ((r.contentMode === 'light' && c.contentMode !== 'light') ||
           (na === 'light_mode' && c.contentMode !== 'light')) {
