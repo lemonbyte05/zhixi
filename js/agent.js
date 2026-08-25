@@ -479,6 +479,12 @@
       { name: 'insert_exhibits_preview', desc: '试算把若干展品插入后半程后的路线与代价', params: { type: 'object', properties: { ids: { type: 'array', items: { type: 'string' } } }, required: ['ids'] } },
       { name: 'recommend_products', desc: '基于今日兴趣/已看/提问记录推荐文创并给出理由', params: { type: 'object', properties: {} } }
     ],
+    /* P0-5：把本地工具定义转成 OpenAI/DeepSeek function-calling schema，让 LLM 真正调用工具 */
+    _toolsSchema: function () {
+      return this._toolDefs.map(function (t) {
+        return { type: 'function', function: { name: t.name, description: t.desc, parameters: t.params } };
+      });
+    },
     _execTool: function (name, args, toolLog) {
       var res = null;
       try {
@@ -522,24 +528,25 @@
 
     _systemPrompt: function () {
       var snap = StateTool.snapshot();
-      return '你是博物馆智能伴游「知息」的 VisitPlannerAgent。游客说话很随意，你要理解真实意图。\n' +
+      var toolsList = '可用工具：\n' + this._toolDefs.map(function (t) { return '  - ' + t.name + '：' + t.desc; }).join('\n');
+      return '你是博物馆智能伴游「知息」的 VisitPlannerAgent。游客说话很随意，你要理解真实意图，并真正调用工具获取事实与决策依据。\n' +
         '【当前上下文】' + JSON.stringify(snap) + '\n' +
-        '【规则】\n' +
-        '1. 先判断是否需要调用工具获取事实；涉及时间/距离/路线的数字必须来自工具结果，禁止自己计算或编造展品ID。\n' +
-        '2. 可用工具：' + this._toolDefs.map(function (t) { return t.name + '(' + t.desc + ')'; }).join('；') + '\n' +
-        '3. 信息收集完成后，最终回复必须是唯一一个JSON对象（不要markdown围栏），字段：\n' +
+        '【工作方式】\n' +
+        '1. 先理解游客的目标与约束（时间/偏好/体力/信息负荷）。\n' +
+        '2. 决定需要调用哪些工具，调用它们获取真实数据：\n' + toolsList + '\n' +
+        '3. 涉及"时间、步行距离、路线、件数、展品ID"的数字一律来自工具结果，禁止自己计算或编造。\n' +
+        '   调用 1-2 次工具拿到必要数据后，立即输出最终 JSON；不要重复调用同一工具，不要为了调用而调用。\n' +
+        '4. 收集完成后，输出唯一一个 JSON 对象（不要 markdown 围栏），字段：\n' +
         '{intent:"reroute|content_mode|wrap_up|propose_add|chat",reply:"≤80字温柔中文",reason:"简短决策原因",' +
         'nextAction:"continue|replan|show_exhibits|light_mode|wrap_up|rest",' +
-        'newRoute:["展品id"]或null,addedExhibits:[],removedExhibits:[],proposedIds:[建议新增的展品id],' +
-        'contentMode:"normal|light",restMinutes:number}\n' +
-        '4. newRoute 只能来自 plan_route/wrap_up_route/adjust_route_lighter 的返回值。\n' +
-        '5. 游客表达疲劳→adjust_route_lighter；时间紧张→wrap_up_route；嫌讲解长→nextAction=light_mode。\n' +
-        '6. 游客询问某文物的关系/来历/类似展品（如"这个和孔子有关系吗？""还有类似的吗？"）：\n' +
-        '   必须先调用 knowledge_search，然后：a) 用检索到的真实信息回答；b) 若结果中存在未参观的展品，\n' +
-        '   设 intent="propose_add"、proposedIds=检索命中的未参观展品ID（最多2件），让游客可一键前往。\n' +
-        '   示例：问"和孔子有关系吗"→search("孔子")→若命中E18孔子见老子画像石且未参观→proposedIds=["E18"]。\n' +
-        '7. 【防幻觉铁律】展品ID与名称只能来自 state_snapshot.currentRoute、已看列表或工具返回结果；\n' +
-        '   禁止凭记忆编造任何ID、名称或史实。不确定就说"我帮你查一下"并调用工具。';
+        'contentMode:"normal|light",restMinutes:number,proposedIds:[建议新增的未参观展品id]}\n' +
+        '5. 不要输出 newRoute / estimatedTotalMinutes：路线与时长由系统根据你调用的规划工具结果自动生成。\n' +
+        '6. 疲劳→调用 adjust_route_lighter；时间紧张→调用 wrap_up_route；按主题重排→调用 plan_route 并给 preferTopics；\n' +
+        '   嫌讲解长→nextAction="light_mode"。\n' +
+        '7. 游客询问关系/来历/类似展品（"这个和孔子有关系吗？""还有类似的吗？"）：先调用 knowledge_search，\n' +
+        '   用检索结果回答；若命中未参观的展品，设 intent="propose_add"、proposedIds=命中ID（最多2件）。\n' +
+        '   例：问"和孔子有关系吗"→search("孔子")→命中E18且未参观→proposedIds=["E18"]。\n' +
+        '8.【防幻觉】展品ID、名称、史实只能来自工具返回结果，禁止编造。不确定就调用工具查，或说"我帮你查一下"。';
     },
     _extractJson: function (text) {
       if (!text) return null;
@@ -551,7 +558,10 @@
       return fetch(ep, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: model || 'deepseek-chat', messages: messages, temperature: 0.4, max_tokens: 700 })
+        body: JSON.stringify({
+          model: model || 'deepseek-chat', messages: messages,
+          temperature: 0.4, max_tokens: 700, tools: this._toolsSchema()
+        })
       }).then(function (rp) {
         if (!rp.ok) throw new Error('http_' + rp.status);
         return rp.json();
@@ -564,10 +574,10 @@
     llmLoop: function (text, ep, model) {
       var self = this;
       var messages = [{ role: 'system', content: this._systemPrompt() }, { role: 'user', content: text }];
-      var toolLog = [];
+      var toolLog = [], toolResults = {};
       var rounds = 0;
       function step() {
-        if (rounds++ >= 3) throw new Error('round_limit');
+        if (rounds++ >= 4) throw new Error('round_limit');
         return self._callChat(ep, model, messages).then(function (msg) {
           if (msg.tool_calls && msg.tool_calls.length) {
             messages.push({ role: 'assistant', content: msg.content || '', tool_calls: msg.tool_calls });
@@ -576,13 +586,14 @@
               var args = {};
               try { args = JSON.parse(tc.function.arguments || '{}'); } catch (e) {}
               var result = self._execTool(fn, args, toolLog);
+              toolResults[fn] = result; // 供 normalize 权威取路线/时长
               messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result).slice(0, 2600) });
             });
             return step();
           }
           var action = self._extractJson(msg.content);
           if (!action) throw new Error('no_json_action');
-          return { action: action, toolCalls: toolLog };
+          return { action: action, toolCalls: toolLog, toolResults: toolResults };
         });
       }
       return step();
@@ -598,7 +609,7 @@
         return new Promise(function (res) { setTimeout(function () { res(self.think(text)); }, 420 + Math.random() * 380); });
       }
       return this.llmLoop(text, ep, cfg.model).then(function (r) {
-        return self.normalize(r.action, r.toolCalls, text);
+        return self.normalize(r.action, r.toolCalls, text, r.toolResults);
       }).catch(function () {
         // P0-1 fallback：LLM 失败 → 本地规则引擎完整接管
         var fb = self.think(text);
@@ -608,7 +619,7 @@
     },
 
     /** 归一化 LLM 决策：数字/路线/展品ID强制以本地工具复核为准 */
-    normalize: function (action, toolCalls, userText) {
+    normalize: function (action, toolCalls, userText, toolResults) {
       var c = Store.ctx;
       action = action || {};
       var outp = this._out({
@@ -635,21 +646,58 @@
           if (!outp.reason) outp.reason = '游客声明仅剩约' + declared + '分钟';
         }
       }
-      // 路线复核：只接受全部合法且非空的 newRoute；自动补齐已看前缀；时长一律本地重算
-      if (Array.isArray(action.newRoute) && action.newRoute.length &&
-          action.newRoute.every(function (id) { return !!EX_INDEX[id]; })) {
-        var headLen0 = Store.nextUnvisited();
-        var head = c.route.slice(0, headLen0);
-        var seen = {}, body = [];
-        action.newRoute.forEach(function (id) {
-          if (!seen[id] && head.indexOf(id) < 0) { seen[id] = 1; body.push(id); }
+      /* P0-4 权威路线：绝不信 LLM 自算的路线/时长。
+         只有 LLM 真的调用了"实际改线"的规划工具(plan_route/wrap_up/adjust_route_lighter)
+         且意图为 reroute/wrap_up 时，才把工具算出的路线作为 newRoute；时长一律由本地 RouteTool 复核。
+         insert_exhibits_preview 仅用于试算（真正插入发生在用户接受提案时），不直接改变路线。
+         若 LLM 声称要改路线却没调用任何规划工具 → 视为违约，本地按意图重算兜底。 */
+      var headLen0 = Store.nextUnvisited();
+      var head = c.route.slice(0, headLen0);
+      var routeIntent = (outp.intent === 'reroute' || outp.intent === 'wrap_up');
+      var toolRoute = null;
+      if (routeIntent && toolResults) {
+        var tr0;
+        if ((tr0 = toolResults.adjust_route_lighter) && tr0.newTail) toolRoute = tr0.newTail;
+        else if ((tr0 = toolResults.wrap_up_route) && tr0.keep) toolRoute = tr0.keep;
+        else if ((tr0 = toolResults.plan_route) && tr0.route) toolRoute = tr0.route;
+      }
+      function applyLocalRoute(body) {
+        if (!body || body.length < 2) return false;
+        var seenD = {}, dedup = [];
+        body.forEach(function (id) {
+          if (EX_INDEX[id] && !seenD[id] && head.indexOf(id) < 0) { seenD[id] = 1; dedup.push(id); }
         });
-        if (body.length >= 2) {
-          outp.newRoute = head.concat(RouteTool.reorderNearest(body, c.locationExhibitId));
-          outp.routeChanged = true;
-          outp.diffBefore = RouteTool.stats(c.route.slice(headLen0));
-          outp.diffAfter = RouteTool.stats(outp.newRoute.slice(headLen0));
-          outp.estimatedTotalMinutes = outp.diffAfter.totalMin;
+        if (dedup.length < 2) return false;
+        var nl = head.concat(RouteTool.reorderNearest(dedup, c.locationExhibitId));
+        if (nl.join() === c.route.join()) return false; // 避免"假重规划"（结果与现路线相同）
+        outp.newRoute = nl; outp.routeChanged = true;
+        outp.diffBefore = RouteTool.stats(c.route.slice(headLen0));
+        outp.diffAfter = RouteTool.stats(nl.slice(headLen0));
+        outp.estimatedTotalMinutes = outp.diffAfter.totalMin;
+        return true;
+      }
+      if (toolRoute && applyLocalRoute(toolRoute)) {
+        // 推荐路径：LLM 调用了规划工具，采用工具计算出的路线
+      } else if (routeIntent || (Array.isArray(action.newRoute) && action.newRoute.length)) {
+        // LLM 声明路由变化但未调用规划工具 → 拒绝其虚构数据，本地按意图重算
+        var rec = null;
+        if (outp.intent === 'wrap_up') rec = PlanningTool.wrapUp().keep;
+        else rec = PlanningTool.lighter(14).newTail;
+        if (!applyLocalRoute(rec)) { outp.routeChanged = false; outp.newRoute = null; }
+        if (outp.intent === 'wrap_up') outp.nextAction = 'wrap_up';
+      }
+      // P0-6 关键约束兜底：明确疲劳信号 → 即便 LLM 只回了安抚语，也强制收窄路线（黄金路径要求）
+      if (userText && /累|走不动|歇|休息|有点赶/.test(userText) && !outp.routeChanged && !outp.declaredMinutes) {
+        var fr = PlanningTool.lighter(14);
+        if (applyLocalRoute(fr.newTail)) {
+          outp.intent = 'reroute';
+          outp.nextAction = INTENT_ACTION.reroute;
+          outp.restMinutes = outp.restMinutes || fr.rest;
+          if (!outp.reason) outp.reason = '检测到疲劳信号，已自动收窄后半程';
+          outp.toolCalls = (outp.toolCalls || []).concat({
+            tool: 'adjust_route_lighter', args: { targetReduceMin: 14 },
+            summary: '删' + fr.dropped.length + '件' + (fr.rest ? '+休息' + fr.rest + '分' : '')
+          });
         }
       }
       // proposedIds 语义校验：候选必须能通过本地知识检索/关联图谱验证（防幻觉）

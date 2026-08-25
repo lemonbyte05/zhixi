@@ -49,6 +49,8 @@ async function handleChat(req, res) {
       temperature: typeof body.temperature === "number" ? body.temperature : 0.4,
       max_tokens: Math.min(typeof body.max_tokens === "number" ? body.max_tokens : 700, 1200)
     };
+    // 透传工具定义（Agent 真·function-calling 需要）；防止非法结构
+    if (Array.isArray(body.tools)) payload.tools = body.tools.slice(0, 12);
     if (!payload.messages.length) throw new Error("empty_messages");
     var upstream = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST",

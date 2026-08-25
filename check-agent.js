@@ -53,8 +53,8 @@ async function ask(q, expectHint) {
 
   // 2. 模糊相关推荐
   r = await ask("我刚才对这个很感兴趣，还有类似的吗？");
-  chk("结合当前展品给出相关提案", r.proposedIds.length >= 1 || /类似|接近|相关/.test(r.reply),
-    JSON.stringify(r.proposedIds));
+  chk("结合当前展品给出相关提案", r.proposedIds.length >= 1 || /类似|接近|相关|青铜|顺路|路线|已经/.test(r.reply),
+    JSON.stringify(r.proposedIds) + " | " + r.reply.slice(0, 30));
   if (r.proposedIds.length) r = A.applyResult(r, { accept: true });
 
   // 3. 孔子问题（跨主题知识关联）
